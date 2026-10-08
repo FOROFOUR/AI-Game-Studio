@@ -405,3 +405,91 @@ Core principle:
 > AI can test the game.
 > AI can review the game.
 > AI cannot independently decide to ship the game.
+
+# AGENTS.md — Additions
+
+Append these sections to `AGENTS.md`. If a section already exists there, merge rather than duplicate.
+
+---
+
+## Approval Protocol
+
+Approval is never assumed. It counts only when recorded in one of these ways:
+
+- A line in `TASKS.md` under the task: `APPROVED: <task-id> by Human, <YYYY-MM-DD>`
+- A pull request merged by the Human
+
+Chat messages like "sounds good" approve the plan discussed in that chat only. Before BUILD, the agent writes the plan into `TASKS.md` and waits for the `APPROVED` line on anything beyond a low-risk task.
+
+Human approval is always required for: production publishing, architecture changes, DataStore schema migrations, deleting important systems, destructive or irreversible operations, monetization or Robux pricing changes, Developer Product changes, and major economy changes. Agents may prepare these changes but must not execute the final action.
+
+## Branching
+
+- Never commit directly to `main`.
+- One branch per task, named `task/<task-id>-<short-name>` (example: `task/GAME-001-mcp-connect`).
+- Commits are small and focused, with the task ID in the message.
+- The Human merges. Agents do not merge their own work.
+
+## Low-Risk Tasks (simplified workflow allowed)
+
+Only these may skip the Human-approval step and go straight from PLAN to BUILD:
+
+- Typo and wording fixes in documentation
+- Code comments and docstrings with no logic changes
+- Formatting-only changes from the configured formatter
+- Adding or updating notes in `docs/` that do not change a decision
+
+Everything else uses the full workflow: BACKLOG → PLAN → HUMAN APPROVAL → BUILD → TEST → AI REVIEW → HUMAN REVIEW → DONE.
+
+If unsure whether a task is low-risk, treat it as not low-risk.
+
+## Evidence Rule
+
+A task is not DONE until evidence is attached to its entry in `TASKS.md`:
+
+- Playtest output or test log (paste the relevant lines, including errors)
+- The diff summary (files changed)
+- A list of anything that was **not** run or **could not** be verified
+
+Agents must say plainly when something was not tested. "Should work" is not evidence.
+
+## AI Review Handoff
+
+GPT reviews Claude's work. The handoff is:
+
+1. Claude opens a pull request (or prepares a diff) with a short description: what changed, why, and how it was tested.
+2. The Human gives GPT the diff plus `AGENTS.md`, `ARCHITECTURE.md`, and the task entry.
+3. GPT replies with a review using this checklist: correctness, scope creep, server-side validation of client input, exploit risks (RemoteEvents, currency, inventory, damage), consistency with `ARCHITECTURE.md` and `DECISIONS.md`, and missing tests.
+4. Claude addresses findings or explains why not. The Human decides.
+
+Record review outcomes in the task entry. A review that was skipped must be marked as skipped, not omitted.
+
+## Roblox Studio MCP Safety
+
+MCP access to Studio is privileged. It can read and modify the open place and execute Luau.
+
+- Use a dedicated test place for MCP work, never a place connected to live data.
+- Do not run Luau that calls DataStores, MessagingService, or HttpService against real services from the test place.
+- No publish credentials, API keys, or Open Cloud secrets in the working environment.
+- Before executing Luau that modifies many instances or deletes anything, state what it will do and ask first.
+- Disconnect MCP when it is not in use.
+
+## Source Control Scope (Script Sync)
+
+Script Sync tracks scripts only (verify current behavior in the Roblox docs). Instances created through MCP, such as Parts and UI, exist only in the place file unless a tool syncs them.
+
+For the MVP:
+
+- Git tracks and reverts **scripts**.
+- Non-script changes are recorded in the task entry (what was created, where) and covered by Studio version history.
+- If this proves too limiting, open a DECISIONS.md proposal to adopt Rojo.
+
+## MVP Planted-Vulnerability Test
+
+To verify AI review catches exploits:
+
+- Work on a throwaway branch named `test/planted-vuln`. Never merge it.
+- Plant a specific flaw, for example a RemoteEvent handler that applies a client-sent `damage` value without server validation.
+- Ask GPT to review the diff without telling it where the flaw is.
+- Pass condition: the review flags the unvalidated client value and recommends server-side validation.
+- Delete the branch afterward and log the result in `TASKS.md`.
